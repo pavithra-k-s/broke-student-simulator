@@ -1,0 +1,89 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+  
+  body {
+    background-color: #111522;
+    color: #F5F0DF;
+    font-family: 'Space Mono', monospace;
+    overflow-x: hidden;
+  }
+
+  /* Custom 8-bit retro scrollbar */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #111522;
+    border-left: 2px solid #20243A;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #3B4268;
+    border: 2px solid #111522;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #C8FF70;
+  }
+}
+
+/* CRT Scanline Effect */
+.scanlines {
+  background: linear-gradient(
+    rgba(18, 16, 16, 0) 50%, 
+    rgba(0, 0, 0, 0.35) 50%
+  ), linear-gradient(
+    90deg,
+    rgba(255, 0, 0, 0.03),
+    rgba(0, 255, 0, 0.01),
+    rgba(0, 0, 255, 0.03)
+  );
+  background-size: 100% 4px, 6px 100%;
+  pointer-events: none;
+}
+
+/* CRT subtle flicker */
+@keyframes flicker {
+  0% { opacity: 0.98; }
+  50% { opacity: 1; }
+  100% { opacity: 0.97; }
+}
+
+.crt-flicker {
+  animation: flicker 0.15s infinite;
+}
+
+/* Retro Pixel Borders and Shadows */
+.pixel-box {
+  box-shadow: 4px 4px 0px 0px #000000;
+  border: 3px solid #20243A;
+}
+
+.pixel-box-highlight {
+  box-shadow: 4px 4px 0px 0px #000000;
+  border: 3px solid #3B4268;
+}
+
+.pixel-btn-active:active {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0px 0px #000000 !important;
+}
+
+/* Text glow utilities */
+.glow-lime {
+  text-shadow: 0 0 8px rgba(200, 255, 112, 0.6);
+}
+
+.glow-amber {
+  text-shadow: 0 0 8px rgba(255, 200, 87, 0.6);
+}
+
+.glow-red {
+  text-shadow: 0 0 8px rgba(255, 101, 122, 0.6);
+}
+
