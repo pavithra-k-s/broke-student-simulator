@@ -21,6 +21,7 @@ interface LandingProps {
   onStartGame: () => void;
   onContinueGame: () => void;
   onResetGame: () => void;
+  onLoadDemo?: () => void;
 }
 
 export const Landing: React.FC<LandingProps> = ({
@@ -30,6 +31,7 @@ export const Landing: React.FC<LandingProps> = ({
   onStartGame,
   onContinueGame,
   onResetGame,
+  onLoadDemo,
 }) => {
   const [showHowToPlay, setShowHowToPlay] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
@@ -58,7 +60,7 @@ export const Landing: React.FC<LandingProps> = ({
         {/* Top Tagline Pill */}
         <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-retro-dark border border-retro-border text-neon-lime font-pixel text-[9px] uppercase tracking-wider mb-6">
           <Sparkles size={12} />
-          <span>DAY 1 EDITION • 16-BIT RETRO SURVIVAL</span>
+          <span>FULL EDITION • 16-BIT RETRO FINANCIAL SURVIVAL</span>
         </div>
 
         {/* Character and Graphic Cluster */}
@@ -155,11 +157,20 @@ export const Landing: React.FC<LandingProps> = ({
           )}
         </div>
 
-        {/* How to play trigger button */}
-        <div className="mt-6">
+        {/* How to play & demo trigger buttons */}
+        <div className="mt-6 flex flex-col items-center gap-2">
+          {onLoadDemo && (
+            <button
+              onClick={onLoadDemo}
+              className="inline-flex items-center gap-1.5 font-pixel text-[10px] text-lavender hover:text-neon-lime transition-colors underline cursor-pointer bg-retro-panel-light/60 px-3 py-1.5 border border-lavender/40 hover:border-neon-lime"
+            >
+              <span>🎮 LOAD DEMO CARTRIDGE (Instant Test Drive)</span>
+            </button>
+          )}
+
           <button
             onClick={() => setShowHowToPlay(true)}
-            className="inline-flex items-center gap-1.5 font-mono text-xs text-cream-muted hover:text-neon-lime transition-colors underline cursor-pointer"
+            className="inline-flex items-center gap-1.5 font-mono text-xs text-cream-muted hover:text-neon-lime transition-colors underline cursor-pointer mt-1"
           >
             <HelpCircle size={14} />
             <span>HOW TO PLAY</span>

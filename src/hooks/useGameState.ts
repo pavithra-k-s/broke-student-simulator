@@ -3,18 +3,20 @@ import { UserProfile } from '../types/profile';
 import { Transaction } from '../types/transaction';
 import { AppSettings, GameSaveData, FinancialSummary } from '../types/game';
 import { GamePlayState, GameTransaction, StoreProduct, DayRecord } from '../types/gameplay';
+import { Achievement } from '../types/achievement';
 import { loadGameData, saveGameData, clearGameData, DEFAULT_SETTINGS } from '../services/storageService';
 import { calculateFinancialSummary } from '../services/budgetEngine';
 import { initializeGamePlayState, calculateGameDailyLimit } from '../services/gameEngine';
 import { findChoice, selectDailyEvent } from '../services/eventEngine';
 import { evaluateQuestCondition } from '../services/questEngine';
+import { evaluateAchievements } from '../services/achievementEngine';
+import { createDemoSaveData } from '../data/demoData';
 import { getQuestForDay } from '../data/quests';
 import { formatINR } from '../utils/currency';
 
 export function useGameState() {
   const [data, setData] = useState<GameSaveData>(() => {
     const loaded = loadGameData();
-    // If profile exists but no gamePlay state, initialize one
     if (loaded.profile && !loaded.gamePlay) {
       loaded.gamePlay = initializeGamePlayState(loaded.profile);
     }
@@ -22,6 +24,7 @@ export function useGameState() {
   });
 
   const [isInitialized, setIsInitialized] = useState<boolean>(false);
+  const [unlockedToast, setUnlockedToast] = useState<Achievement | null>(null);
 
   // Sync to LocalStorage on state changes once initialized
   useEffect(() => {
@@ -44,6 +47,30 @@ export function useGameState() {
     return data.gamePlay || initializeGamePlayState(data.profile);
   }, [data.gamePlay, data.profile]);
 
+  // Derive live achievements
+  const achievementResult = useMemo(() => {
+    return evaluateAchievements({
+      existingState: data.achievements || {},
+      profile: data.profile,
+      transactions: data.transactions,
+      gamePlay: data.gamePlay,
+    });
+  }, [data.achievements, data.profile, data.transactions, data.gamePlay]);
+
+  // If new achievements unlocked, save updated state and notify
+  useEffect(() => {
+    if (achievementResult.newlyUnlocked.length > 0) {
+      const latest = achievementResult.newlyUnlocked[0];
+      setUnlockedToast(latest);
+      setData((prev) => ({
+        ...prev,
+        achievements: achievementResult.updatedState,
+      }));
+      const timer = setTimeout(() => setUnlockedToast(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [achievementResult.newlyUnlocked, achievementResult.updatedState]);
+
   // Real Profile actions
   const saveProfile = useCallback((newProfile: UserProfile) => {
     setData((prev) => ({
@@ -52,7 +79,6 @@ export function useGameState() {
         ...newProfile,
         lastUpdated: Date.now(),
       },
-      // When profile is newly created, initialize fresh gamePlay state
       gamePlay: prev.gamePlay || initializeGamePlayState(newProfile),
     }));
   }, []);
@@ -87,10 +113,26 @@ export function useGameState() {
     return newTx;
   }, []);
 
+  const editTransaction = useCallback((id: string, updates: Partial<Transaction>) => {
+    setData((prev) => ({
+      ...prev,
+      transactions: prev.transactions.map((tx) =>
+        tx.id === id ? { ...tx, ...updates } : tx
+      ),
+    }));
+  }, []);
+
   const deleteTransaction = useCallback((id: string) => {
     setData((prev) => ({
       ...prev,
       transactions: prev.transactions.filter((tx) => tx.id !== id),
+    }));
+  }, []);
+
+  const importTransactions = useCallback((imported: Transaction[]) => {
+    setData((prev) => ({
+      ...prev,
+      transactions: [...imported, ...prev.transactions],
     }));
   }, []);
 
@@ -130,6 +172,8 @@ export function useGameState() {
       transactions: [],
       settings: DEFAULT_SETTINGS,
       gamePlay: undefined,
+      achievements: {},
+      isDemoMode: false,
     });
   }, []);
 
@@ -141,11 +185,42 @@ export function useGameState() {
     }));
   }, []);
 
+  // Reset Real Transactions Only (Preserves Game Play save!)
+  const resetRealTransactionsOnly = useCallback(() => {
+    setData((prev) => ({
+      ...prev,
+      transactions: [],
+    }));
+  }, []);
+
+  // Demo Mode
+  const loadDemoMode = useCallback(() => {
+    const demo = createDemoSaveData();
+    setData(demo);
+  }, []);
+
+  const exitDemoMode = useCallback(() => {
+    clearGameData();
+    setData({
+      version: 1,
+      profile: null,
+      transactions: [],
+      settings: DEFAULT_SETTINGS,
+      gamePlay: undefined,
+      achievements: {},
+      isDemoMode: false,
+    });
+  }, []);
+
+  // Full Backup Import
+  const importFullBackup = useCallback((backup: GameSaveData) => {
+    setData(backup);
+  }, []);
+
   // ==========================================
-  // DAY 2 GAMEPLAY ACTIONS (SEPARATE GAME MONEY)
+  // DAY 2 & 3 GAMEPLAY ACTIONS
   // ==========================================
 
-  // 1. Resolve Daily Random Event Choice
   const handleEventChoice = useCallback((choiceId: string) => {
     setData((prev) => {
       const current = prev.gamePlay || initializeGamePlayState(prev.profile);
@@ -154,7 +229,7 @@ export function useGameState() {
       const choice = findChoice(current.currentEvent, choiceId);
       if (!choice) return prev;
 
-      const cost = choice.costPaise; // Positive = cost, Negative = reward/income
+      const cost = choice.costPaise;
       const isExpense = cost > 0;
       const isIncome = cost < 0;
       const absAmount = Math.abs(cost);
@@ -191,7 +266,6 @@ export function useGameState() {
       const newXp = current.xp + choice.xpReward;
       const isFrugal = cost <= 0 || choiceId === 'c2' || choiceId === 'c3';
 
-      // Live Quest check
       const questComplete = current.currentQuest.isCompleted || evaluateQuestCondition(current.currentQuest, {
         dailySpentPaise: newDailySpent,
         discretionarySpentPaise: newDiscretionary,
@@ -225,14 +299,12 @@ export function useGameState() {
     });
   }, []);
 
-  // 2. Buy Store Product
   const buyStoreProduct = useCallback((product: StoreProduct): { success: boolean; message: string } => {
     let result = { success: false, message: '' };
 
     setData((prev) => {
       const current = prev.gamePlay || initializeGamePlayState(prev.profile);
 
-      // Free alternative handling
       if (product.pricePaise === 0) {
         const freeTx: GameTransaction = {
           id: `gtx_free_${Date.now()}`,
@@ -274,7 +346,6 @@ export function useGameState() {
         };
       }
 
-      // Affordability check
       if (current.gameBalancePaise < product.pricePaise) {
         result = {
           success: false,
@@ -303,7 +374,6 @@ export function useGameState() {
         createdAt: Date.now(),
       };
 
-      // Evaluate quest
       const questComplete = current.currentQuest.isCompleted || evaluateQuestCondition(current.currentQuest, {
         dailySpentPaise: newDailySpent,
         discretionarySpentPaise: newDiscretionary,
@@ -340,7 +410,6 @@ export function useGameState() {
     return result;
   }, []);
 
-  // 3. Claim Quest XP
   const claimQuestReward = useCallback(() => {
     setData((prev) => {
       const current = prev.gamePlay || initializeGamePlayState(prev.profile);
@@ -360,7 +429,6 @@ export function useGameState() {
     });
   }, []);
 
-  // 4. Custom Store Products
   const addCustomStoreProduct = useCallback((productData: Omit<StoreProduct, 'id'>) => {
     setData((prev) => {
       const current = prev.gamePlay || initializeGamePlayState(prev.profile);
@@ -395,7 +463,6 @@ export function useGameState() {
     });
   }, []);
 
-  // 5. Open / Close Day End Summary Modal
   const openDaySummary = useCallback(() => {
     setData((prev) => {
       const current = prev.gamePlay || initializeGamePlayState(prev.profile);
@@ -422,14 +489,12 @@ export function useGameState() {
     });
   }, []);
 
-  // 6. Advance to Next Simulated Day (Strictly explicit confirmation)
   const advanceToNextDay = useCallback(() => {
     setData((prev) => {
       const current = prev.gamePlay || initializeGamePlayState(prev.profile);
       const profile = prev.profile;
       const gameDailyLimit = calculateGameDailyLimit(current.openingBalancePaise, profile?.daysUntilAllowance || 15);
 
-      // Evaluate quest completion at day end
       const questComplete = current.currentQuest.isCompleted || evaluateQuestCondition(current.currentQuest, {
         dailySpentPaise: current.dailySpentPaise,
         discretionarySpentPaise: current.discretionarySpentPaise,
@@ -447,16 +512,13 @@ export function useGameState() {
         choseFrugalChoiceToday: current.eventChoiceId === 'c2' || current.eventChoiceId === 'c3',
       });
 
-      // Award quest XP if completed and not yet claimed
       const questXp = questComplete && !current.currentQuest.xpClaimed ? current.currentQuest.xpReward : 0;
       const budgetSurviveXp = current.dailySpentPaise <= gameDailyLimit && current.gameBalancePaise >= 0 ? 25 : 5;
       const totalDayXp = questXp + budgetSurviveXp;
 
-      // Survival streak calculation
       const survivedUnderBudget = current.dailySpentPaise <= gameDailyLimit && current.gameBalancePaise >= 0;
       const newStreak = survivedUnderBudget ? current.streak + 1 : 0;
 
-      // Create historical day record
       const dayRecord: DayRecord = {
         day: current.simulatedDay,
         openingBalancePaise: current.openingBalancePaise,
@@ -474,15 +536,13 @@ export function useGameState() {
 
       const nextDay = current.simulatedDay + 1;
 
-      // Days to allowance countdown logic
       let daysLeft = profile ? Math.max(0, profile.daysUntilAllowance - 1) : 14;
       let newBalance = current.gameBalancePaise;
       let paydayTransactions: GameTransaction[] = [];
 
-      // Payday Event: when allowance drop is triggered (daysLeft === 0)
       if (daysLeft === 0 && profile && profile.monthlyAllowancePaise > 0) {
         newBalance += profile.monthlyAllowancePaise;
-        daysLeft = 30; // Reset allowance cycle
+        daysLeft = 30;
 
         paydayTransactions.push({
           id: `gtx_payday_${Date.now()}`,
@@ -496,7 +556,6 @@ export function useGameState() {
         });
       }
 
-      // Next day quest & event
       const nextQuest = getQuestForDay(nextDay);
       const nextEvent = selectDailyEvent(
         profile?.difficulty || 'NORMAL',
@@ -536,14 +595,23 @@ export function useGameState() {
     financialSummary,
     hasProfile,
     gamePlay,
+    achievements: achievementResult.achievements,
+    unlockedToast,
+    isDemoMode: Boolean(data.isDemoMode),
     saveProfile,
     updateProfile,
     addTransaction,
+    editTransaction,
     deleteTransaction,
+    importTransactions,
     toggleFixedExpensePaid,
     updateSettings,
     resetGame,
     resetGameSimulationOnly,
+    resetRealTransactionsOnly,
+    loadDemoMode,
+    exitDemoMode,
+    importFullBackup,
     handleEventChoice,
     buyStoreProduct,
     claimQuestReward,
@@ -552,5 +620,6 @@ export function useGameState() {
     openDaySummary,
     closeDaySummary,
     advanceToNextDay,
+    fullSaveData: data,
   };
 }

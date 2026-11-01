@@ -8,12 +8,14 @@ import { Landing } from './pages/Landing';
 import { Onboarding } from './pages/Onboarding';
 import { Dashboard } from './pages/Dashboard';
 import { TransactionsPage } from './pages/TransactionsPage';
+import { Analytics } from './pages/Analytics';
+import { Achievements } from './pages/Achievements';
 import { Settings } from './pages/Settings';
 import { PlayMode } from './pages/PlayMode';
 import { Store } from './pages/Store';
-import { PlaceholderPage } from './pages/PlaceholderPage';
 import { AddTransactionModal } from './components/transactions/AddTransactionModal';
 import { TransactionType } from './types/transaction';
+import { Trophy, Gamepad2, X } from 'lucide-react';
 
 export function App() {
   const {
@@ -23,13 +25,21 @@ export function App() {
     financialSummary,
     hasProfile,
     gamePlay,
+    achievements,
+    unlockedToast,
+    isDemoMode,
     saveProfile,
     updateProfile,
     addTransaction,
+    editTransaction,
     deleteTransaction,
-    updateSettings,
+    importTransactions,
     resetGame,
     resetGameSimulationOnly,
+    resetRealTransactionsOnly,
+    loadDemoMode,
+    exitDemoMode,
+    importFullBackup,
     handleEventChoice,
     buyStoreProduct,
     claimQuestReward,
@@ -38,6 +48,7 @@ export function App() {
     openDaySummary,
     closeDaySummary,
     advanceToNextDay,
+    fullSaveData,
   } = useGameState();
 
   // Primary screen state: 'landing' | 'onboarding' | 'app'
@@ -78,6 +89,12 @@ export function App() {
     setActiveTab('dashboard');
   };
 
+  const handleDirectDemoLoad = () => {
+    loadDemoMode();
+    setScreen('app');
+    setActiveTab('dashboard');
+  };
+
   const handleOpenAddExpense = () => {
     setTxModalDefaultType('expense');
     setIsTxModalOpen(true);
@@ -88,11 +105,24 @@ export function App() {
     setIsTxModalOpen(true);
   };
 
-  // Render view
   return (
     <div className={`min-h-screen bg-retro-bg text-cream ${settings.animations ? '' : 'no-animations'}`}>
       {/* CRT Scanline Overlay Effect */}
       <RetroScanlines enabled={settings.crtEffect} />
+
+      {/* FLOATING ACHIEVEMENT UNLOCKED NOTIFICATION */}
+      {unlockedToast && (
+        <div className="fixed top-4 right-4 z-50 animate-bounce bg-retro-panel border-4 border-amber p-4 shadow-pixel-lg max-w-sm flex items-center gap-3">
+          <div className="w-10 h-10 bg-amber/20 border-2 border-amber flex items-center justify-center shrink-0">
+            <Trophy className="w-6 h-6 text-amber animate-pulse" />
+          </div>
+          <div className="space-y-0.5">
+            <p className="font-pixel text-[9px] text-amber tracking-wider">🏆 TROPHY UNLOCKED!</p>
+            <h4 className="font-pixel text-xs text-cream">{unlockedToast.title}</h4>
+            <p className="font-mono text-[10px] text-cream-muted">{unlockedToast.description}</p>
+          </div>
+        </div>
+      )}
 
       {/* Screen 1: Landing Page */}
       {screen === 'landing' && (
@@ -103,6 +133,7 @@ export function App() {
           onStartGame={handleStartGame}
           onContinueGame={handleContinueGame}
           onResetGame={handleHardReset}
+          onLoadDemo={handleDirectDemoLoad}
         />
       )}
 
@@ -117,6 +148,22 @@ export function App() {
       {/* Screen 3: Main Application */}
       {screen === 'app' && profile && (
         <div className="flex flex-col min-h-screen">
+          {/* DEMO MODE ACTIVE BANNER */}
+          {isDemoMode && (
+            <div className="bg-amber/90 text-bg px-4 py-1.5 font-mono text-xs font-bold flex items-center justify-between shadow-md z-40">
+              <div className="flex items-center gap-2">
+                <Gamepad2 className="w-4 h-4 shrink-0" />
+                <span>DEMO MODE ACTIVE — Loaded with sample transactions, Day 4 game progress, and unlocked badges.</span>
+              </div>
+              <button
+                onClick={exitDemoMode}
+                className="font-pixel text-[9px] bg-bg text-amber px-2.5 py-1 rounded hover:bg-cream hover:text-bg transition-colors flex items-center gap-1 cursor-pointer"
+              >
+                <X className="w-3 h-3" /> EXIT DEMO
+              </button>
+            </div>
+          )}
+
           {/* Top Application Header with Live Wallet Display */}
           <Header
             profile={profile}
@@ -150,21 +197,30 @@ export function App() {
                 <TransactionsPage
                   transactions={transactions}
                   summary={financialSummary}
+                  onAddTransaction={addTransaction}
                   onDeleteTransaction={deleteTransaction}
+                  onEditTransaction={editTransaction}
+                  onImportTransactions={importTransactions}
                   onOpenAddExpense={handleOpenAddExpense}
                   onOpenAddIncome={handleOpenAddIncome}
                   onBackToDashboard={() => setActiveTab('dashboard')}
+                  gameTransactions={gamePlay?.gameTransactions || []}
                 />
               )}
 
-              {activeTab === 'settings' && (
-                <Settings
+              {/* Day 3: Full Analytics Dashboard */}
+              {activeTab === 'analytics' && (
+                <Analytics
                   profile={profile}
-                  settings={settings}
-                  onUpdateProfile={updateProfile}
-                  onUpdateSettings={updateSettings}
-                  onResetGame={handleHardReset}
-                  onBackToDashboard={() => setActiveTab('dashboard')}
+                  transactions={transactions}
+                  onNavigateTransactions={() => setActiveTab('transactions')}
+                />
+              )}
+
+              {/* Day 3: 15 Unlockable Achievements */}
+              {activeTab === 'achievements' && (
+                <Achievements
+                  achievements={achievements}
                 />
               )}
 
@@ -193,34 +249,19 @@ export function App() {
                 />
               )}
 
-              {/* Day 3 Placeholders */}
-              {activeTab === 'analytics' && (
-                <PlaceholderPage
-                  title="FINANCIAL AUTOPSY & ANALYTICS"
-                  targetDay="DAY 3"
-                  description="Detailed data visualization and expense breakdown charts exposing where every single rupee slipped through your fingers."
-                  upcomingFeatures={[
-                    'Category Breakdown Donut Chart (Food vs Hostel vs Chaos)',
-                    'Burn-rate Trajectory vs Allowance Forecast',
-                    'Spending Personality Diagnostics (Frugal Ninja vs Chaos Spender)',
-                    'Historical Net Worth graph across the semester',
-                  ]}
-                  onBackToDashboard={() => setActiveTab('dashboard')}
-                />
-              )}
-
-              {activeTab === 'achievements' && (
-                <PlaceholderPage
-                  title="BAD DECISION TROPHIES & ACHIEVEMENTS"
-                  targetDay="DAY 3"
-                  description="Earn 8-bit badges and unlockable retro trophies commemorating your triumphs and spectacular budget failures."
-                  upcomingFeatures={[
-                    '30+ Custom Pixel Trophies ("Ramen Alchemist", "Zero Balance Survivor")',
-                    'Unlockable Secret Titles and Custom Avatars',
-                    'End-of-Month Survival Report Card with Letter Grades (A+ down to F-)',
-                    'Shareable 16-Bit Retro Financial Certificates',
-                  ]}
-                  onBackToDashboard={() => setActiveTab('dashboard')}
+              {/* Day 3 Settings & Data Management */}
+              {activeTab === 'settings' && (
+                <Settings
+                  profile={profile}
+                  fullSaveData={fullSaveData}
+                  onUpdateProfile={updateProfile}
+                  onResetGameOnly={resetGameSimulationOnly}
+                  onResetRealLedgerOnly={resetRealTransactionsOnly}
+                  onFullReset={handleHardReset}
+                  onImportFullBackup={importFullBackup}
+                  onLoadDemoMode={handleDirectDemoLoad}
+                  onExitDemoMode={isDemoMode ? exitDemoMode : undefined}
+                  isDemoMode={isDemoMode}
                 />
               )}
             </main>

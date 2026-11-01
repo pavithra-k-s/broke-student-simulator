@@ -1,6 +1,7 @@
 import { UserProfile } from './profile';
 import { Transaction } from './transaction';
 import { GamePlayState } from './gameplay';
+import { AchievementState } from './achievement';
 
 export type FinancialTone = 'critical' | 'warning' | 'surviving' | 'optimistic' | 'suspicious';
 
@@ -23,6 +24,8 @@ export interface GameSaveData {
   transactions: Transaction[];
   settings: AppSettings;
   gamePlay?: GamePlayState;
+  achievements?: AchievementState;
+  isDemoMode?: boolean;
 }
 
 export interface FinancialSummary {

@@ -52,15 +52,13 @@ export const NAV_ITEMS: NavItem[] = [
     id: 'analytics',
     label: 'Analytics',
     icon: <BarChart3 size={18} />,
-    isAvailableDay1: false,
-    comingSoonBadge: 'DAY 3',
+    isAvailableDay1: true,
   },
   {
     id: 'achievements',
     label: 'Achievements',
     icon: <Trophy size={18} />,
-    isAvailableDay1: false,
-    comingSoonBadge: 'DAY 3',
+    isAvailableDay1: true,
   },
   {
     id: 'settings',

@@ -32,6 +32,8 @@ export function loadGameData(): GameSaveData {
         animations: parsed.settings?.animations ?? DEFAULT_SETTINGS.animations,
       },
       gamePlay: parsed.gamePlay,
+      achievements: parsed.achievements || {},
+      isDemoMode: parsed.isDemoMode || false,
     };
   } catch (error) {
     console.error('Failed to load Broke Student Simulator save file from LocalStorage:', error);
