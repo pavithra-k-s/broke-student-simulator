@@ -24,6 +24,22 @@ export function useGameState() {
   });
 
   const [isInitialized, setIsInitialized] = useState<boolean>(false);
+
+  // Set of achievement IDs that have already shown a toast or were already unlocked on load
+  const [seenToasts, setSeenToasts] = useState<Set<string>>(() => {
+    const loaded = loadGameData();
+    const alreadyUnlocked = new Set<string>();
+    if (loaded.achievements) {
+      Object.entries(loaded.achievements).forEach(([id, state]) => {
+        if (state.isUnlocked) {
+          alreadyUnlocked.add(id);
+        }
+      });
+    }
+    return alreadyUnlocked;
+  });
+
+  const [toastQueue, setToastQueue] = useState<Achievement[]>([]);
   const [unlockedToast, setUnlockedToast] = useState<Achievement | null>(null);
 
   // Sync to LocalStorage on state changes once initialized
@@ -57,19 +73,51 @@ export function useGameState() {
     });
   }, [data.achievements, data.profile, data.transactions, data.gamePlay]);
 
-  // If new achievements unlocked, save updated state and notify
+  // If new achievements unlocked, persist updated state and queue newly unlocked unseen achievements
   useEffect(() => {
     if (achievementResult.newlyUnlocked.length > 0) {
-      const latest = achievementResult.newlyUnlocked[0];
-      setUnlockedToast(latest);
+      // 1. Persist updated achievements state to save data
       setData((prev) => ({
         ...prev,
         achievements: achievementResult.updatedState,
       }));
-      const timer = setTimeout(() => setUnlockedToast(null), 4000);
+
+      // 2. Only queue achievements that haven't been shown in a toast yet
+      const unseen = achievementResult.newlyUnlocked.filter((a) => !seenToasts.has(a.id));
+      if (unseen.length > 0) {
+        setSeenToasts((prev) => {
+          const next = new Set(prev);
+          unseen.forEach((a) => next.add(a.id));
+          return next;
+        });
+        setToastQueue((prev) => [...prev, ...unseen]);
+      }
+    }
+  }, [achievementResult.newlyUnlocked, achievementResult.updatedState, seenToasts]);
+
+  // Display next toast from queue when no toast is currently active
+  useEffect(() => {
+    if (!unlockedToast && toastQueue.length > 0) {
+      const nextToast = toastQueue[0];
+      setUnlockedToast(nextToast);
+      setToastQueue((prev) => prev.slice(1));
+    }
+  }, [unlockedToast, toastQueue]);
+
+  // Dismiss toast handler allowing user to accept and remove popup
+  const dismissAchievementToast = useCallback(() => {
+    setUnlockedToast(null);
+  }, []);
+
+  // Auto-dismiss after 6 seconds if not manually accepted
+  useEffect(() => {
+    if (unlockedToast) {
+      const timer = setTimeout(() => {
+        setUnlockedToast(null);
+      }, 6000);
       return () => clearTimeout(timer);
     }
-  }, [achievementResult.newlyUnlocked, achievementResult.updatedState]);
+  }, [unlockedToast]);
 
   // Real Profile actions
   const saveProfile = useCallback((newProfile: UserProfile) => {
@@ -166,6 +214,9 @@ export function useGameState() {
   // Full Hard Reset
   const resetGame = useCallback(() => {
     clearGameData();
+    setSeenToasts(new Set());
+    setToastQueue([]);
+    setUnlockedToast(null);
     setData({
       version: 1,
       profile: null,
@@ -196,11 +247,21 @@ export function useGameState() {
   // Demo Mode
   const loadDemoMode = useCallback(() => {
     const demo = createDemoSaveData();
+    const demoSeen = new Set<string>();
+    if (demo.achievements) {
+      Object.keys(demo.achievements).forEach((id) => demoSeen.add(id));
+    }
+    setSeenToasts(demoSeen);
+    setToastQueue([]);
+    setUnlockedToast(null);
     setData(demo);
   }, []);
 
   const exitDemoMode = useCallback(() => {
     clearGameData();
+    setSeenToasts(new Set());
+    setToastQueue([]);
+    setUnlockedToast(null);
     setData({
       version: 1,
       profile: null,
@@ -214,6 +275,15 @@ export function useGameState() {
 
   // Full Backup Import
   const importFullBackup = useCallback((backup: GameSaveData) => {
+    const backupSeen = new Set<string>();
+    if (backup.achievements) {
+      Object.entries(backup.achievements).forEach(([id, state]) => {
+        if (state.isUnlocked) backupSeen.add(id);
+      });
+    }
+    setSeenToasts(backupSeen);
+    setToastQueue([]);
+    setUnlockedToast(null);
     setData(backup);
   }, []);
 
@@ -597,6 +667,7 @@ export function useGameState() {
     gamePlay,
     achievements: achievementResult.achievements,
     unlockedToast,
+    dismissAchievementToast,
     isDemoMode: Boolean(data.isDemoMode),
     saveProfile,
     updateProfile,

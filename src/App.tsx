@@ -15,7 +15,7 @@ import { PlayMode } from './pages/PlayMode';
 import { Store } from './pages/Store';
 import { AddTransactionModal } from './components/transactions/AddTransactionModal';
 import { TransactionType } from './types/transaction';
-import { Trophy, Gamepad2, X } from 'lucide-react';
+import { Trophy, Gamepad2, X, CheckCircle } from 'lucide-react';
 
 export function App() {
   const {
@@ -27,6 +27,7 @@ export function App() {
     gamePlay,
     achievements,
     unlockedToast,
+    dismissAchievementToast,
     isDemoMode,
     saveProfile,
     updateProfile,
@@ -110,17 +111,54 @@ export function App() {
       {/* CRT Scanline Overlay Effect */}
       <RetroScanlines enabled={settings.crtEffect} />
 
-      {/* FLOATING ACHIEVEMENT UNLOCKED NOTIFICATION */}
+      {/* FLOATING ACHIEVEMENT UNLOCKED NOTIFICATION WITH ACCEPT BUTTON */}
       {unlockedToast && (
-        <div className="fixed top-4 right-4 z-50 animate-bounce bg-retro-panel border-4 border-amber p-4 shadow-pixel-lg max-w-sm flex items-center gap-3">
-          <div className="w-10 h-10 bg-amber/20 border-2 border-amber flex items-center justify-center shrink-0">
-            <Trophy className="w-6 h-6 text-amber animate-pulse" />
+        <div className="fixed top-5 right-5 z-50 max-w-sm w-full bg-retro-panel border-4 border-amber p-4 shadow-pixel-lg animate-fade-in">
+          {/* Header with Trophy and Close Button */}
+          <div className="flex items-center justify-between pb-2 mb-2 border-b border-amber/30">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 bg-amber/20 border-2 border-amber flex items-center justify-center shrink-0">
+                <Trophy className="w-4 h-4 text-amber animate-pulse" />
+              </div>
+              <div>
+                <span className="font-pixel text-[8px] text-amber tracking-wider block">
+                  🏆 TROPHY UNLOCKED!
+                </span>
+                <span className="font-pixel text-[8px] text-neon-lime">
+                  +{unlockedToast.xpBonus || 50} XP REWARD
+                </span>
+              </div>
+            </div>
+
+            <button
+              onClick={dismissAchievementToast}
+              className="text-cream/50 hover:text-danger-red p-1 transition-colors cursor-pointer"
+              title="Close notification"
+              aria-label="Close notification"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
-          <div className="space-y-0.5">
-            <p className="font-pixel text-[9px] text-amber tracking-wider">🏆 TROPHY UNLOCKED!</p>
-            <h4 className="font-pixel text-xs text-cream">{unlockedToast.title}</h4>
-            <p className="font-mono text-[10px] text-cream-muted">{unlockedToast.description}</p>
+
+          {/* Trophy Info */}
+          <div className="space-y-1 mb-3">
+            <div className="flex items-center gap-1.5">
+              <span className="text-base">{unlockedToast.emoji || '🏆'}</span>
+              <h4 className="font-pixel text-xs text-cream">{unlockedToast.title}</h4>
+            </div>
+            <p className="font-mono text-[11px] text-cream-muted leading-tight">
+              {unlockedToast.description}
+            </p>
           </div>
+
+          {/* Prominent Accept / Claim Button */}
+          <button
+            onClick={dismissAchievementToast}
+            className="w-full py-2 bg-amber hover:bg-neon-lime text-retro-dark font-pixel text-[10px] tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-pixel-sm active:translate-y-0.5"
+          >
+            <CheckCircle className="w-3.5 h-3.5" />
+            ACCEPT & CLAIM
+          </button>
         </div>
       )}
 
